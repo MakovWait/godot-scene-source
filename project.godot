@@ -13,3 +13,7 @@ config_version=5
 config/name="godot-scene-source"
 config/features=PackedStringArray("4.2")
 config/icon="res://icon.png"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/scene-source/plugin.cfg")
