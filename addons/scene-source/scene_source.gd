@@ -6,20 +6,24 @@ extends Resource
 @export var _origin_scene: PackedScene:
 	set(value):
 		_origin_scene = value
-		_overrides = _parse_origin_scene()
-		notify_property_list_changed()
+		if Engine.is_editor_hint():
+			_overrides = _parse_origin_scene()
+			notify_property_list_changed()
+
 
 var _overrides = _OverriddenProperties.new()
+var _deserialized = {}
 
 
 func instantiate() -> Node:
 	var node = _origin_scene.instantiate()
-	for prop in _overrides.all():
-		node.set(prop.name(), prop.value())
+	for name in _deserialized.keys():
+		node.set(name, _deserialized[name])
 	return node
 
 
 func _get(property: StringName):
+	if not Engine.is_editor_hint(): return null
 	var value = _overrides\
 		.named(property)\
 		.map(func(x: _OverriddenProperty): return x.value())\
@@ -28,15 +32,19 @@ func _get(property: StringName):
 
 
 func _set(property: StringName, value: Variant) -> bool:
-	_overrides\
-		.named(property)\
-		.inspect(func(x: _OverriddenProperty):
-			x.value_set(value)\
-		)
+	if Engine.is_editor_hint():
+		_overrides\
+			.named(property)\
+			.inspect(func(x: _OverriddenProperty):
+				x.value_set(value)\
+			)
+	else:
+		_deserialized[property] = value
 	return true
 
 
 func _property_can_revert(property) -> bool:
+	if not Engine.is_editor_hint(): return false
 	return _overrides\
 		.named(property)\
 		.map(func(x: _OverriddenProperty):
@@ -45,6 +53,7 @@ func _property_can_revert(property) -> bool:
 
 
 func _property_get_revert(property) -> Variant:
+	if not Engine.is_editor_hint(): return null
 	return _overrides\
 		.named(property)\
 		.map(func(x: _OverriddenProperty):
@@ -53,10 +62,12 @@ func _property_get_revert(property) -> Variant:
 
 
 func _get_property_list():
+	if not Engine.is_editor_hint(): return []
 	return _overrides.all().map(func(x: _OverriddenProperty): return x.to_gd_property_schema())
 
 
 func _reload_properties():
+	if not Engine.is_editor_hint(): return
 	var current = _overrides
 	_overrides = _parse_origin_scene()
 	for prop in _overrides.all():
@@ -71,7 +82,8 @@ func _parse_origin_scene() -> _OverriddenProperties:
 	var origin_state = _Opt.new(_origin_scene).map(_SceneStateSmart.from_packed_scene)
 	var scene_properties = origin_state.map(func(state: _SceneStateSmart):
 		var scene_root = state.nodes().root()
-		return scene_root.node_script().map(_ScriptSmart.new).map(func(scene_root_script: _ScriptSmart):
+		return scene_root.node_script().map(func(script: Script):
+			var scene_root_script = _ScriptSmart.new(script)
 			return scene_root_script.props().all().map(func(script_prop: _ScriptPropertySmart):
 				var overriden_prop = _OverriddenProperty.new(
 					script_prop.to_gd_property(),
